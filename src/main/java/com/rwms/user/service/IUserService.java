@@ -12,6 +12,10 @@ public interface IUserService {
 
     UserResponse getUserById(Long id);
 
+    UserResponse getUserByEmail(String email);
+
+    List<UserResponse> getUsersByDepartment(String department);
+
     UserResponse createUser(CreateUserRequest request);
 
     UserResponse updateUser(Long id, UpdateUserRequest request);

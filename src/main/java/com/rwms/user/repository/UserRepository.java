@@ -1,21 +1,22 @@
 package com.rwms.user.repository;
 
 import com.rwms.user.entity.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Repository interface for User persistence operations.
- * Extend JpaRepository<User, Long> once Spring Data JPA dependency is added.
- */
-public interface UserRepository {
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
 
-    List<User> findAll();
+    Optional<User> findByEmail(String email);
 
-    Optional<User> findById(Long id);
+    Optional<User> findByEmployeeId(String employeeId);
 
-    User save(User user);
+    List<User> findByDepartment(String department);
 
-    void deleteById(Long id);
+    boolean existsByEmail(String email);
+
+    boolean existsByEmployeeId(String employeeId);
 }
