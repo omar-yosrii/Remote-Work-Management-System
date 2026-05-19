@@ -4,6 +4,7 @@ import com.rwms.user.dto.CreateUserRequest;
 import com.rwms.user.dto.UpdateUserRequest;
 import com.rwms.user.dto.UserResponse;
 import com.rwms.user.service.IUserService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,9 +33,21 @@ public class UserController {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
+    // GET /users/email/{email}
+    @GetMapping("/email/{email}")
+    public ResponseEntity<UserResponse> getUserByEmail(@PathVariable String email) {
+        return ResponseEntity.ok(userService.getUserByEmail(email));
+    }
+
+    // GET /users/department/{department}
+    @GetMapping("/department/{department}")
+    public ResponseEntity<List<UserResponse>> getUsersByDepartment(@PathVariable String department) {
+        return ResponseEntity.ok(userService.getUsersByDepartment(department));
+    }
+
     // POST /users
     @PostMapping
-    public ResponseEntity<UserResponse> createUser(@RequestBody CreateUserRequest request) {
+    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(userService.createUser(request));
     }
 

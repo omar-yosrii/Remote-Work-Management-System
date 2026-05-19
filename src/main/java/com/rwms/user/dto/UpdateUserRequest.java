@@ -1,9 +1,6 @@
 package com.rwms.user.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Data
 @Builder
@@ -12,7 +9,10 @@ import lombok.NoArgsConstructor;
 public class UpdateUserRequest {
 
     private String fullName;
-    private String email;
-    private String password;
-    private String role;
+
+    private String phone;
+
+    private String githubUsername;
+
+    private String department;
 }
