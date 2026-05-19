@@ -1,6 +1,6 @@
 # Remote Work Management System (RWMS) - Progress Report
 
-**Project Status**: Phase 1 & Phase 2 Completed ✅
+**Project Status**: Phase 1, Phase 2 & Phase 3 Completed ✅
 
 This document serves as a comprehensive report of all features, modules, and configurations implemented in the RWMS backend up to the current stage.
 
@@ -60,6 +60,27 @@ This document serves as a comprehensive report of all features, modules, and con
   - Calculates project completion statistics dynamically.
   - Returns total tasks, completed tasks (status = `APPROVED`), total subtasks, and approved subtasks for a specific project (`GET /progress/project/{projectId}`).
   - Provides a high-level summary of all projects for managers (`GET /progress/manager/all`).
+
+---
+
+## 🚀 Phase 3: Timer Persistence, Submission & Review
+
+### 1. Timer State Persistence (Strategy Pattern)
+- **`WorkSession` Entity**: Tracks active timer sessions per employee (`workedSeconds`, `breakSeconds`, `SessionState`).
+- **Strategy Pattern Implementation**: `TimerStrategy` interface with `RunningStrategy` and `BreakStrategy` to isolate logic for time increments and automatic state transitions (e.g., triggering break warnings at 4h - 3m, forcing break at 4h, and signaling submission page at 8h - 10m).
+- **`TimerService` & `TimerController`**: Handles `startSession`, `getActiveSession` (for browser refreshes), and `syncTick` (called periodically by the frontend to update time and state).
+
+### 2. Submissions
+- **`TaskSubmission` Entity**: Links a completed task to an employee's submission (comment, file attachment path, alternative GitHub link).
+- **`SubmissionService`**:
+  - `submitTask`: Handles file uploads locally, sets task status to `SUBMITTED`, and ends the employee's active timer session.
+  - `reviewSubmission`: Allows the project's Team Leader to `APPROVE` or `REJECT` a submission. Approving auto-approves completed subtasks.
+  - `getSubmissionDetail`: Provides full details (subtasks, timestamps, comments) to the Team Leader for review.
+- **`SubmissionController`**: Exposes endpoints for employees to submit (via `multipart/form-data`) and for admins to review.
+
+### 3. Admin Comments & Notes
+- **`SubmissionComment` Entity**: Represents messages attached to a submission.
+- **Private vs Public Notes**: Admins can add `isPrivateNote = true` comments visible only to managers/admins, or public comments visible to the employee for feedback/revisions.
 
 ---
 
