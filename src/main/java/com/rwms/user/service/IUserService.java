@@ -21,4 +21,15 @@ public interface IUserService {
     UserResponse updateUser(Long id, UpdateUserRequest request);
 
     void deleteUser(Long id);
+
+    // Manager Operations
+    List<UserResponse> getPendingAdmins();
+    
+    void approveAdmin(Long userId);
+    
+    void rejectAdmin(Long userId);
+
+    UserResponse updateUserRoleAndDepartment(Long userId, String role, String department);
+
+    void deactivateUser(Long userId);
 }

@@ -90,4 +90,68 @@ public class UserService implements IUserService {
         }
         userRepository.deleteById(id);
     }
+
+    // --- Manager Operations ---
+
+    @Override
+    public List<UserResponse> getPendingAdmins() {
+        return userRepository.findByStatusAndRole(User.Status.PENDING, User.Role.ADMIN)
+                .stream()
+                .map(userMapper::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void approveAdmin(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+        
+        if (user.getRole() != User.Role.ADMIN || user.getStatus() != User.Status.PENDING) {
+            throw new IllegalArgumentException("User is not a pending admin");
+        }
+        
+        user.setStatus(User.Status.ACTIVE);
+        userRepository.save(user);
+    }
+
+    @Override
+    public void rejectAdmin(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+        
+        if (user.getRole() != User.Role.ADMIN || user.getStatus() != User.Status.PENDING) {
+            throw new IllegalArgumentException("User is not a pending admin");
+        }
+        
+        user.setStatus(User.Status.REJECTED);
+        userRepository.save(user);
+    }
+
+    @Override
+    public UserResponse updateUserRoleAndDepartment(Long userId, String role, String department) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+
+        if (role != null) {
+            try {
+                user.setRole(User.Role.valueOf(role.toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid role");
+            }
+        }
+        
+        if (department != null) {
+            user.setDepartment(department);
+        }
+
+        return userMapper.toResponse(userRepository.save(user));
+    }
+
+    @Override
+    public void deactivateUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+        user.setStatus(User.Status.INACTIVE);
+        userRepository.save(user);
+    }
 }
