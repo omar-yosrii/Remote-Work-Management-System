@@ -53,4 +53,10 @@ public class WorkSession {
 
     @Builder.Default
     private boolean submissionPageTriggered = false;
+
+    @Builder.Default
+    private boolean breakWarningSent = false;
+
+    @Builder.Default
+    private boolean breakEndingWarningSent = false;
 }

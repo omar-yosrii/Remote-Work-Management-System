@@ -9,6 +9,9 @@ import com.rwms.timer.repository.WorkSessionRepository;
 import com.rwms.timer.strategy.TimerContext;
 import com.rwms.user.entity.User;
 import com.rwms.user.repository.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
+import com.rwms.notification.dto.NotificationEvent;
+import com.rwms.notification.entity.NotificationType;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -20,13 +23,15 @@ public class TimerService {
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final TimerContext timerContext;
+    private final ApplicationEventPublisher eventPublisher;
 
     public TimerService(WorkSessionRepository workSessionRepository, TaskRepository taskRepository,
-                        UserRepository userRepository, TimerContext timerContext) {
+                        UserRepository userRepository, TimerContext timerContext, ApplicationEventPublisher eventPublisher) {
         this.workSessionRepository = workSessionRepository;
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.timerContext = timerContext;
+        this.eventPublisher = eventPublisher;
     }
 
     private WorkSessionResponse toResponse(WorkSession session) {
@@ -111,6 +116,26 @@ public class TimerService {
             }
         }
         
+        if (session.getWorkedSeconds() >= 14220 && session.getWorkedSeconds() < 14400 && !session.isBreakTaken() && !session.isBreakWarningSent()) {
+            eventPublisher.publishEvent(NotificationEvent.builder()
+                    .recipient(employee)
+                    .title("Break Warning")
+                    .message("You have been working for almost 4 hours. Please take a break soon.")
+                    .type(NotificationType.BREAK_WARNING)
+                    .build());
+            session.setBreakWarningSent(true);
+        }
+
+        if (session.getBreakSeconds() >= 3420 && session.getBreakSeconds() < 3600 && session.getState() == WorkSession.SessionState.ON_BREAK && !session.isBreakEndingWarningSent()) {
+            eventPublisher.publishEvent(NotificationEvent.builder()
+                    .recipient(employee)
+                    .title("Break Ending Soon")
+                    .message("Your break will end in less than 3 minutes.")
+                    .type(NotificationType.BREAK_ENDING_WARNING)
+                    .build());
+            session.setBreakEndingWarningSent(true);
+        }
+
         session.setLastSyncedAt(now);
         return toResponse(workSessionRepository.save(session));
     }

@@ -13,8 +13,14 @@ import com.rwms.user.entity.User;
 import com.rwms.user.repository.UserRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
+import com.rwms.notification.dto.NotificationEvent;
+import com.rwms.notification.entity.NotificationType;
+import com.rwms.audit.service.AuditLogService;
+import com.rwms.audit.command.*;
 
 import java.security.SecureRandom;
+import java.util.List;
 
 @Service
 public class AuthService {
@@ -24,13 +30,19 @@ public class AuthService {
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final ApplicationEventPublisher eventPublisher;
+    private final AuditLogService auditLogService;
 
     public AuthService(UserRepository userRepository,
                        BCryptPasswordEncoder passwordEncoder,
-                       JwtUtil jwtUtil) {
+                       JwtUtil jwtUtil,
+                       ApplicationEventPublisher eventPublisher,
+                       AuditLogService auditLogService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.eventPublisher = eventPublisher;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -53,6 +65,8 @@ public class AuthService {
         }
 
         String token = jwtUtil.generateToken(user);
+
+        auditLogService.log(new UserLoginCommand(user, user.getEmail(), "Successful login"));
 
         return LoginResponse.builder()
                 .token(token)
@@ -88,6 +102,19 @@ public class AuthService {
 
         userRepository.save(user);
 
+        // Notify managers
+        List<User> managers = userRepository.findByRole(User.Role.MANAGER);
+        for (User manager : managers) {
+            eventPublisher.publishEvent(NotificationEvent.builder()
+                    .recipient(manager)
+                    .title("New Admin Registration")
+                    .message("A new admin (" + request.getFullName() + ") has registered and is pending approval.")
+                    .type(NotificationType.NEW_ADMIN_REGISTRATION)
+                    .build());
+        }
+
+        auditLogService.log(new AccountCreatedCommand(user, user.getEmail(), "Admin account created and pending approval"));
+
         // TODO: In production, send tempPassword via email notification
         System.out.println("[RWMS] Temporary password for " + request.getGmailAddress() + ": " + tempPassword);
     }
@@ -110,6 +137,8 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setFirstLogin(false);
         userRepository.save(user);
+
+        auditLogService.log(new PasswordChangedCommand(user, user.getEmail(), "Password changed"));
     }
 
     private String generateTempPassword(int length) {

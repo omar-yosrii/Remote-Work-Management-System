@@ -15,6 +15,11 @@ import com.rwms.timer.service.TimerService;
 import com.rwms.user.entity.User;
 import com.rwms.user.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
+import com.rwms.notification.dto.NotificationEvent;
+import com.rwms.notification.entity.NotificationType;
+import com.rwms.audit.service.AuditLogService;
+import com.rwms.audit.command.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,19 +40,24 @@ public class SubmissionService {
     private final SubtaskRepository subtaskRepository;
     private final UserRepository userRepository;
     private final TimerService timerService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final AuditLogService auditLogService;
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
 
     public SubmissionService(TaskSubmissionRepository submissionRepository, SubmissionCommentRepository commentRepository,
                              TaskRepository taskRepository, SubtaskRepository subtaskRepository,
-                             UserRepository userRepository, TimerService timerService) {
+                             UserRepository userRepository, TimerService timerService,
+                             ApplicationEventPublisher eventPublisher, AuditLogService auditLogService) {
         this.submissionRepository = submissionRepository;
         this.commentRepository = commentRepository;
         this.taskRepository = taskRepository;
         this.subtaskRepository = subtaskRepository;
         this.userRepository = userRepository;
         this.timerService = timerService;
+        this.eventPublisher = eventPublisher;
+        this.auditLogService = auditLogService;
     }
 
     private SubmissionResponse toResponse(TaskSubmission sub) {
@@ -119,6 +129,8 @@ public class SubmissionService {
             // Ignore if no active session
         }
 
+        auditLogService.log(new TaskSubmittedCommand(employee, employeeEmail, "Submitted task '" + task.getName() + "'"));
+
         return toResponse(submission);
     }
 
@@ -145,6 +157,15 @@ public class SubmissionService {
                 }
             }
             subtaskRepository.saveAll(subtasks);
+
+            eventPublisher.publishEvent(NotificationEvent.builder()
+                    .recipient(submission.getEmployee())
+                    .title("Submission Approved")
+                    .message("Your submission for task '" + task.getName() + "' has been approved.")
+                    .type(NotificationType.SUBMISSION_APPROVED)
+                    .build());
+            
+            auditLogService.log(new TaskApprovedCommand(admin, adminEmail, "Approved task '" + task.getName() + "'"));
             
         } else if ("REJECT".equalsIgnoreCase(request.getAction())) {
             if (request.getRejectionReason() == null || request.getRejectionReason().isEmpty()) {
@@ -153,6 +174,15 @@ public class SubmissionService {
             submission.setReviewStatus(TaskSubmission.ReviewStatus.REJECTED);
             submission.setRejectionReason(request.getRejectionReason());
             task.setStatus(Task.TaskStatus.REJECTED);
+
+            eventPublisher.publishEvent(NotificationEvent.builder()
+                    .recipient(submission.getEmployee())
+                    .title("Submission Rejected")
+                    .message("Your submission for task '" + task.getName() + "' was rejected. Reason: " + request.getRejectionReason())
+                    .type(NotificationType.SUBMISSION_REJECTED)
+                    .build());
+
+            auditLogService.log(new TaskRejectedCommand(admin, adminEmail, "Rejected task '" + task.getName() + "'"));
         } else {
             throw new IllegalArgumentException("Invalid action. Use APPROVE or REJECT");
         }
@@ -218,7 +248,18 @@ public class SubmissionService {
                 .isPrivateNote(request.isPrivateNote())
                 .build();
 
-        return toCommentResponse(commentRepository.save(comment));
+        comment = commentRepository.save(comment);
+
+        if (!request.isPrivateNote() && author.getRole() != User.Role.EMPLOYEE) {
+            eventPublisher.publishEvent(NotificationEvent.builder()
+                    .recipient(submission.getEmployee())
+                    .title("New Comment")
+                    .message("Admin added a comment to your submission on task: " + submission.getTask().getName())
+                    .type(NotificationType.ADMIN_COMMENT)
+                    .build());
+        }
+
+        return toCommentResponse(comment);
     }
 
     public List<CommentResponse> getComments(Long submissionId, String userEmail) {

@@ -10,6 +10,11 @@ import com.rwms.task.repository.SubtaskRepository;
 import com.rwms.task.repository.TaskRepository;
 import com.rwms.user.entity.User;
 import com.rwms.user.repository.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
+import com.rwms.notification.dto.NotificationEvent;
+import com.rwms.notification.entity.NotificationType;
+import com.rwms.audit.service.AuditLogService;
+import com.rwms.audit.command.*;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -23,13 +28,18 @@ public class TaskService implements ITaskService {
     private final SubtaskRepository subtaskRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
+    private final AuditLogService auditLogService;
 
     public TaskService(TaskRepository taskRepository, SubtaskRepository subtaskRepository,
-                       ProjectRepository projectRepository, UserRepository userRepository) {
+                       ProjectRepository projectRepository, UserRepository userRepository,
+                       ApplicationEventPublisher eventPublisher, AuditLogService auditLogService) {
         this.taskRepository = taskRepository;
         this.subtaskRepository = subtaskRepository;
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher;
+        this.auditLogService = auditLogService;
     }
 
     private SubtaskResponse toSubtaskResponse(Subtask subtask) {
@@ -159,6 +169,15 @@ public class TaskService implements ITaskService {
 
         task.setAssignedEmployee(employee);
         taskRepository.save(task);
+
+        eventPublisher.publishEvent(NotificationEvent.builder()
+                .recipient(employee)
+                .title("New Task Assigned")
+                .message("You have been assigned to task: " + task.getName())
+                .type(NotificationType.TASK_ASSIGNED)
+                .build());
+
+        auditLogService.log(new TaskAssignedCommand(null, "system", "Assigned task '" + task.getName() + "' to " + employee.getEmail()));
     }
 
     @Override
@@ -216,5 +235,7 @@ public class TaskService implements ITaskService {
         subtask.setCompletedAt(LocalDateTime.now());
         subtask.setEmployeeComment(comment);
         subtaskRepository.save(subtask);
+
+        auditLogService.log(new SubtaskCompletedCommand(employee, employeeEmail, "Completed subtask '" + subtask.getName() + "'"));
     }
 }

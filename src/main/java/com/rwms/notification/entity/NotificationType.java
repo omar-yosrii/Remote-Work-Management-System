@@ -1,0 +1,12 @@
+package com.rwms.notification.entity;
+
+public enum NotificationType {
+    TASK_ASSIGNED,
+    SUBMISSION_APPROVED,
+    SUBMISSION_REJECTED,
+    ADMIN_COMMENT,
+    NEW_ADMIN_REGISTRATION,
+    TL_ASSIGNMENT_REQUEST,
+    BREAK_WARNING,
+    BREAK_ENDING_WARNING
+}

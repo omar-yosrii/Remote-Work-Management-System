@@ -9,8 +9,13 @@ import com.rwms.project.entity.Project;
 import com.rwms.project.entity.TeamLeaderRequest;
 import com.rwms.project.repository.ProjectRepository;
 import com.rwms.project.repository.TeamLeaderRequestRepository;
+import com.rwms.task.entity.Task;
+import com.rwms.task.repository.TaskRepository;
 import com.rwms.user.entity.User;
 import com.rwms.user.repository.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
+import com.rwms.notification.dto.NotificationEvent;
+import com.rwms.notification.entity.NotificationType;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -22,16 +27,21 @@ public class ProjectService implements IProjectService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final TeamLeaderRequestRepository teamLeaderRequestRepository;
+    private final TaskRepository taskRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public ProjectService(ProjectRepository projectRepository, UserRepository userRepository, TeamLeaderRequestRepository teamLeaderRequestRepository) {
+    public ProjectService(ProjectRepository projectRepository, UserRepository userRepository, TeamLeaderRequestRepository teamLeaderRequestRepository, TaskRepository taskRepository, ApplicationEventPublisher eventPublisher) {
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
         this.teamLeaderRequestRepository = teamLeaderRequestRepository;
+        this.taskRepository = taskRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     private ProjectResponse toResponse(Project project) {
-        // We will implement task counting in the ProgressService or update later.
-        // For now, taskCount and completedTaskCount are 0.
+        int taskCount = (int) taskRepository.countByProjectId(project.getId());
+        int completedTaskCount = (int) taskRepository.countByProjectIdAndStatus(project.getId(), Task.TaskStatus.COMPLETED);
+
         return ProjectResponse.builder()
                 .id(project.getId())
                 .name(project.getName())
@@ -39,8 +49,8 @@ public class ProjectService implements IProjectService {
                 .description(project.getDescription())
                 .teamLeaderName(project.getTeamLeader() != null ? project.getTeamLeader().getFullName() : null)
                 .contributorCount(project.getContributors().size())
-                .taskCount(0) 
-                .completedTaskCount(0)
+                .taskCount(taskCount) 
+                .completedTaskCount(completedTaskCount)
                 .build();
     }
 
@@ -131,6 +141,16 @@ public class ProjectService implements IProjectService {
                 .status(TeamLeaderRequest.RequestStatus.PENDING)
                 .build();
         teamLeaderRequestRepository.save(request);
+
+        List<User> managers = userRepository.findByRole(User.Role.MANAGER);
+        for (User manager : managers) {
+            eventPublisher.publishEvent(NotificationEvent.builder()
+                    .recipient(manager)
+                    .title("New Team Leader Request")
+                    .message(requester.getFullName() + " has requested to be Team Leader for project: " + project.getName())
+                    .type(NotificationType.TL_ASSIGNMENT_REQUEST)
+                    .build());
+        }
     }
 
     @Override
