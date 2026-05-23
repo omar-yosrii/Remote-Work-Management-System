@@ -157,7 +157,7 @@ public class TaskService implements ITaskService {
     }
 
     @Override
-    public void assignTask(Long taskId, AssignTaskRequest request) {
+    public void assignTask(Long taskId, AssignTaskRequest request, String performedByEmail) {
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found: " + taskId));
         User employee = userRepository.findById(request.getEmployeeId())
@@ -177,7 +177,9 @@ public class TaskService implements ITaskService {
                 .type(NotificationType.TASK_ASSIGNED)
                 .build());
 
-        auditLogService.log(new TaskAssignedCommand(null, "system", "Assigned task '" + task.getName() + "' to " + employee.getEmail()));
+        User performedBy = userRepository.findByEmail(performedByEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        auditLogService.log(new TaskAssignedCommand(performedBy, performedByEmail, "Assigned task '" + task.getName() + "' to " + employee.getEmail()));
     }
 
     @Override

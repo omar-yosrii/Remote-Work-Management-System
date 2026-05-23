@@ -22,9 +22,7 @@ public class JwtUtil {
     private long expiration; // 32400000 ms = 9 hours
 
     private Key getSigningKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(
-                java.util.Base64.getEncoder().encodeToString(secret.getBytes())
-        );
+        byte[] keyBytes = Decoders.BASE64.decode(secret);
         return Keys.hmacShaKeyFor(keyBytes);
     }
 

@@ -40,7 +40,7 @@ public class ProjectService implements IProjectService {
 
     private ProjectResponse toResponse(Project project) {
         int taskCount = (int) taskRepository.countByProjectId(project.getId());
-        int completedTaskCount = (int) taskRepository.countByProjectIdAndStatus(project.getId(), Task.TaskStatus.COMPLETED);
+        int completedTaskCount = (int) taskRepository.countByProjectIdAndStatus(project.getId(), Task.TaskStatus.APPROVED);
 
         return ProjectResponse.builder()
                 .id(project.getId())

@@ -18,7 +18,7 @@ public interface ITaskService {
 
     void deleteSubtask(Long subtaskId);
 
-    void assignTask(Long taskId, AssignTaskRequest request);
+    void assignTask(Long taskId, AssignTaskRequest request, String performedByEmail);
 
     List<TaskResponse> getMyTasks(String employeeEmail);
 

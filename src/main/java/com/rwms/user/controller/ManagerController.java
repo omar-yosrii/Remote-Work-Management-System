@@ -72,4 +72,11 @@ public class ManagerController {
         userService.deactivateUser(userId);
         return ResponseEntity.ok().build();
     }
+
+    @DeleteMapping("/users/{userId}")
+    public ResponseEntity<Void> deleteUser(@PathVariable Long userId) {
+        userService.deleteUser(userId);
+        return ResponseEntity.noContent().build();
+    }
+
 }

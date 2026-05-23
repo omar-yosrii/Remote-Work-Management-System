@@ -63,8 +63,9 @@ public class TaskController {
 
     @PostMapping("/{taskId}/assign")
     public ResponseEntity<Void> assignTask(@PathVariable Long taskId,
-                                           @Valid @RequestBody AssignTaskRequest request) {
-        taskService.assignTask(taskId, request);
+                                           @Valid @RequestBody AssignTaskRequest request,
+                                           @AuthenticationPrincipal User user) {
+        taskService.assignTask(taskId, request, user.getEmail());
         return ResponseEntity.ok().build();
     }
 

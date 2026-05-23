@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.time.LocalDateTime;
 
 @Service
 public class SubmissionService {
@@ -114,6 +115,7 @@ public class SubmissionService {
         submission.setTask(task);
         submission.setEmployee(employee);
         submission.setAccomplishmentComment(request.getAccomplishmentComment());
+        submission.setSubmittedAt(LocalDateTime.now());
         if (filePath != null) submission.setAttachmentPath(filePath);
         if (request.getAlternativeGithubLink() != null) submission.setAlternativeGithubLink(request.getAlternativeGithubLink());
         submission.setReviewStatus(TaskSubmission.ReviewStatus.PENDING);

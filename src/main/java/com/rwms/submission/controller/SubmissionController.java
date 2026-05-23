@@ -19,9 +19,11 @@ import java.util.List;
 public class SubmissionController {
 
     private final SubmissionService submissionService;
+    private final ObjectMapper objectMapper;
 
-    public SubmissionController(SubmissionService submissionService) {
+    public SubmissionController(SubmissionService submissionService, ObjectMapper objectMapper) {
         this.submissionService = submissionService;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping(value = "/task/{taskId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -29,14 +31,12 @@ public class SubmissionController {
                                                          @RequestParam("request") String requestJson,
                                                          @RequestParam(value = "file", required = false) MultipartFile file,
                                                          @AuthenticationPrincipal User user) throws Exception {
-        
-        ObjectMapper mapper = new ObjectMapper();
-        SubmitTaskRequest request = mapper.readValue(requestJson, SubmitTaskRequest.class);
-        
+
+        SubmitTaskRequest request = objectMapper.readValue(requestJson, SubmitTaskRequest.class);
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(submissionService.submitTask(taskId, request, file, user.getEmail()));
     }
-
     @GetMapping("/my")
     public ResponseEntity<List<SubmissionResponse>> getMySubmissions(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(submissionService.getMySubmissions(user.getEmail()));

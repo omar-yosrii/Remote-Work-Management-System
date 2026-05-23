@@ -39,8 +39,7 @@ public class TaskSubmission {
 
     private String alternativeGithubLink;
 
-    @CreationTimestamp
-    @Column(updatable = false)
+
     private LocalDateTime submittedAt;
 
     @Enumerated(EnumType.STRING)

@@ -26,6 +26,7 @@ import java.util.List;
 public class AuthService {
 
     private static final String TEMP_PASSWORD_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthService.class);
 
     private final UserRepository userRepository;
     private final BCryptPasswordEncoder passwordEncoder;
@@ -116,7 +117,7 @@ public class AuthService {
         auditLogService.log(new AccountCreatedCommand(user, user.getEmail(), "Admin account created and pending approval"));
 
         // TODO: In production, send tempPassword via email notification
-        System.out.println("[RWMS] Temporary password for " + request.getGmailAddress() + ": " + tempPassword);
+        log.info("[RWMS] Temporary password for {}: {}", request.getGmailAddress(), tempPassword);
     }
 
     /**
