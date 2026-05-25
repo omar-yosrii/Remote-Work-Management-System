@@ -59,16 +59,18 @@ public class UserService implements IUserService {
 
     @Override
     public UserResponse createUser(CreateUserRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new DuplicateEntityException("Email already in use: " + request.getEmail());
-        }
-        if (request.getEmployeeId() != null && userRepository.existsByEmployeeId(request.getEmployeeId())) {
-            throw new DuplicateEntityException("Employee ID already in use: " + request.getEmployeeId());
-        }
-        User user = userMapper.toEntity(request);
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        return userMapper.toResponse(userRepository.save(user));
-    }
+    	if (userRepository.existsByEmail(request.getEmail())) {
+        	throw new DuplicateEntityException("Email already in use: " + request.getEmail());
+    	}
+    	if (request.getEmployeeId() != null && userRepository.existsByEmployeeId(request.getEmployeeId())) {
+        	throw new DuplicateEntityException("Employee ID already in use: " + request.getEmployeeId());
+    	}
+    	User user = userMapper.toEntity(request);
+    	user.setPassword(passwordEncoder.encode(request.getPassword()));
+    	user.setStatus(User.Status.ACTIVE);
+    	user.setFirstLogin(true);
+    	return userMapper.toResponse(userRepository.save(user));
+     }
 
     @Override
     public UserResponse updateUser(Long id, UpdateUserRequest request) {

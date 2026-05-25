@@ -17,11 +17,13 @@ import org.springframework.context.ApplicationEventPublisher;
 import com.rwms.notification.dto.NotificationEvent;
 import com.rwms.notification.entity.NotificationType;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class ProjectService implements IProjectService {
 
     private final ProjectRepository projectRepository;

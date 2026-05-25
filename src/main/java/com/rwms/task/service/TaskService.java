@@ -16,12 +16,14 @@ import com.rwms.notification.entity.NotificationType;
 import com.rwms.audit.service.AuditLogService;
 import com.rwms.audit.command.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
+@Transactional
 public class TaskService implements ITaskService {
 
     private final TaskRepository taskRepository;
@@ -163,7 +165,9 @@ public class TaskService implements ITaskService {
         User employee = userRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + request.getEmployeeId()));
 
-        if (!task.getProject().getContributors().contains(employee)) {
+        Project project = projectRepository.findById(task.getProject().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        if (!project.getContributors().contains(employee)) {
             throw new IllegalArgumentException("Employee is not a contributor to this project");
         }
 

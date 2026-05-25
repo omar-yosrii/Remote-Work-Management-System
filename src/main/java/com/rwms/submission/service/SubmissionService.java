@@ -14,6 +14,10 @@ import com.rwms.task.repository.TaskRepository;
 import com.rwms.timer.service.TimerService;
 import com.rwms.user.entity.User;
 import com.rwms.user.repository.UserRepository;
+
+import com.rwms.project.entity.Project;
+import com.rwms.project.repository.ProjectRepository;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import com.rwms.notification.dto.NotificationEvent;
@@ -21,6 +25,7 @@ import com.rwms.notification.entity.NotificationType;
 import com.rwms.audit.service.AuditLogService;
 import com.rwms.audit.command.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
@@ -33,6 +38,7 @@ import java.util.stream.Collectors;
 import java.time.LocalDateTime;
 
 @Service
+@Transactional
 public class SubmissionService {
 
     private final TaskSubmissionRepository submissionRepository;
@@ -40,6 +46,7 @@ public class SubmissionService {
     private final TaskRepository taskRepository;
     private final SubtaskRepository subtaskRepository;
     private final UserRepository userRepository;
+    private final ProjectRepository projectRepository;
     private final TimerService timerService;
     private final ApplicationEventPublisher eventPublisher;
     private final AuditLogService auditLogService;
@@ -47,15 +54,23 @@ public class SubmissionService {
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
 
-    public SubmissionService(TaskSubmissionRepository submissionRepository, SubmissionCommentRepository commentRepository,
-                             TaskRepository taskRepository, SubtaskRepository subtaskRepository,
-                             UserRepository userRepository, TimerService timerService,
-                             ApplicationEventPublisher eventPublisher, AuditLogService auditLogService) {
+    public SubmissionService(
+            TaskSubmissionRepository submissionRepository,
+            SubmissionCommentRepository commentRepository,
+            TaskRepository taskRepository,
+            SubtaskRepository subtaskRepository,
+            UserRepository userRepository,
+            ProjectRepository projectRepository,
+            TimerService timerService,
+            ApplicationEventPublisher eventPublisher,
+            AuditLogService auditLogService
+    ) {
         this.submissionRepository = submissionRepository;
         this.commentRepository = commentRepository;
         this.taskRepository = taskRepository;
         this.subtaskRepository = subtaskRepository;
         this.userRepository = userRepository;
+        this.projectRepository = projectRepository;
         this.timerService = timerService;
         this.eventPublisher = eventPublisher;
         this.auditLogService = auditLogService;
@@ -82,47 +97,70 @@ public class SubmissionService {
     }
 
     public SubmissionResponse submitTask(Long taskId, SubmitTaskRequest request, MultipartFile file, String employeeEmail) {
+
         User employee = userRepository.findByEmail(employeeEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
         Task task = taskRepository.findById(taskId)
                 .orElseThrow(() -> new ResourceNotFoundException("Task not found"));
 
-        if (task.getAssignedEmployee() == null || !task.getAssignedEmployee().getId().equals(employee.getId())) {
+        if (task.getAssignedEmployee() == null ||
+                !task.getAssignedEmployee().getId().equals(employee.getId())) {
             throw new IllegalArgumentException("Task not assigned to you");
         }
-        if (task.getStatus() != Task.TaskStatus.IN_PROGRESS && task.getStatus() != Task.TaskStatus.REJECTED) {
+
+        if (task.getStatus() != Task.TaskStatus.IN_PROGRESS &&
+                task.getStatus() != Task.TaskStatus.REJECTED) {
             throw new IllegalStateException("Task must be IN_PROGRESS or REJECTED to submit");
         }
 
         String filePath = null;
+
         if (file != null && !file.isEmpty()) {
             try {
                 String folderPath = uploadDir + File.separator + taskId;
+
                 File folder = new File(folderPath);
+
                 if (!folder.exists()) {
                     folder.mkdirs();
                 }
+
                 String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+
                 Path path = Paths.get(folderPath + File.separator + fileName);
+
                 Files.write(path, file.getBytes());
+
                 filePath = path.toString();
+
             } catch (IOException e) {
                 throw new RuntimeException("Failed to store file", e);
             }
         }
 
-        TaskSubmission submission = submissionRepository.findByTaskId(taskId).orElse(new TaskSubmission());
+        TaskSubmission submission = submissionRepository.findByTaskId(taskId)
+                .orElse(new TaskSubmission());
+
         submission.setTask(task);
         submission.setEmployee(employee);
         submission.setAccomplishmentComment(request.getAccomplishmentComment());
         submission.setSubmittedAt(LocalDateTime.now());
-        if (filePath != null) submission.setAttachmentPath(filePath);
-        if (request.getAlternativeGithubLink() != null) submission.setAlternativeGithubLink(request.getAlternativeGithubLink());
+
+        if (filePath != null) {
+            submission.setAttachmentPath(filePath);
+        }
+
+        if (request.getAlternativeGithubLink() != null) {
+            submission.setAlternativeGithubLink(request.getAlternativeGithubLink());
+        }
+
         submission.setReviewStatus(TaskSubmission.ReviewStatus.PENDING);
 
         submission = submissionRepository.save(submission);
 
         task.setStatus(Task.TaskStatus.SUBMITTED);
+
         taskRepository.save(task);
 
         try {
@@ -131,69 +169,121 @@ public class SubmissionService {
             // Ignore if no active session
         }
 
-        auditLogService.log(new TaskSubmittedCommand(employee, employeeEmail, "Submitted task '" + task.getName() + "'"));
+        auditLogService.log(
+                new TaskSubmittedCommand(
+                        employee,
+                        employeeEmail,
+                        "Submitted task '" + task.getName() + "'"
+                )
+        );
 
         return toResponse(submission);
     }
 
     public SubmissionResponse reviewSubmission(Long submissionId, ReviewRequest request, String adminEmail) {
+
         User admin = userRepository.findByEmail(adminEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
         TaskSubmission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
 
         Task task = submission.getTask();
-        if (task.getProject().getTeamLeader() == null || !task.getProject().getTeamLeader().getId().equals(admin.getId())) {
-            throw new IllegalArgumentException("Only the project Team Leader can review submissions");
+
+        Project project = projectRepository.findById(task.getProject().getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+
+        if (project.getTeamLeader() == null ||
+                !project.getTeamLeader().getId().equals(admin.getId())) {
+
+            throw new IllegalArgumentException(
+                    "Only the project Team Leader can review submissions"
+            );
         }
 
         if ("APPROVE".equalsIgnoreCase(request.getAction())) {
+
             submission.setReviewStatus(TaskSubmission.ReviewStatus.APPROVED);
+
             task.setStatus(Task.TaskStatus.APPROVED);
-            
-            // Mark subtasks as approved
+
             List<Subtask> subtasks = subtaskRepository.findByTaskId(task.getId());
+
             for (Subtask st : subtasks) {
                 if (st.isCompletedByEmployee()) {
                     st.setApprovedByAdmin(true);
                 }
             }
+
             subtaskRepository.saveAll(subtasks);
 
-            eventPublisher.publishEvent(NotificationEvent.builder()
-                    .recipient(submission.getEmployee())
-                    .title("Submission Approved")
-                    .message("Your submission for task '" + task.getName() + "' has been approved.")
-                    .type(NotificationType.SUBMISSION_APPROVED)
-                    .build());
-            
-            auditLogService.log(new TaskApprovedCommand(admin, adminEmail, "Approved task '" + task.getName() + "'"));
-            
+            eventPublisher.publishEvent(
+                    NotificationEvent.builder()
+                            .recipient(submission.getEmployee())
+                            .title("Submission Approved")
+                            .message("Your submission for task '" + task.getName() + "' has been approved.")
+                            .type(NotificationType.SUBMISSION_APPROVED)
+                            .build()
+            );
+
+            auditLogService.log(
+                    new TaskApprovedCommand(
+                            admin,
+                            adminEmail,
+                            "Approved task '" + task.getName() + "'"
+                    )
+            );
+
         } else if ("REJECT".equalsIgnoreCase(request.getAction())) {
-            if (request.getRejectionReason() == null || request.getRejectionReason().isEmpty()) {
+
+            if (request.getRejectionReason() == null ||
+                    request.getRejectionReason().isEmpty()) {
+
                 throw new IllegalArgumentException("Rejection reason is required");
             }
+
             submission.setReviewStatus(TaskSubmission.ReviewStatus.REJECTED);
+
             submission.setRejectionReason(request.getRejectionReason());
+
             task.setStatus(Task.TaskStatus.REJECTED);
 
-            eventPublisher.publishEvent(NotificationEvent.builder()
-                    .recipient(submission.getEmployee())
-                    .title("Submission Rejected")
-                    .message("Your submission for task '" + task.getName() + "' was rejected. Reason: " + request.getRejectionReason())
-                    .type(NotificationType.SUBMISSION_REJECTED)
-                    .build());
+            eventPublisher.publishEvent(
+                    NotificationEvent.builder()
+                            .recipient(submission.getEmployee())
+                            .title("Submission Rejected")
+                            .message(
+                                    "Your submission for task '" +
+                                            task.getName() +
+                                            "' was rejected. Reason: " +
+                                            request.getRejectionReason()
+                            )
+                            .type(NotificationType.SUBMISSION_REJECTED)
+                            .build()
+            );
 
-            auditLogService.log(new TaskRejectedCommand(admin, adminEmail, "Rejected task '" + task.getName() + "'"));
+            auditLogService.log(
+                    new TaskRejectedCommand(
+                            admin,
+                            adminEmail,
+                            "Rejected task '" + task.getName() + "'"
+                    )
+            );
+
         } else {
-            throw new IllegalArgumentException("Invalid action. Use APPROVE or REJECT");
+
+            throw new IllegalArgumentException(
+                    "Invalid action. Use APPROVE or REJECT"
+            );
         }
 
         taskRepository.save(task);
+
         return toResponse(submissionRepository.save(submission));
     }
 
     public SubmissionDetailResponse getSubmissionDetail(Long submissionId) {
+
         TaskSubmission sub = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
 
@@ -219,28 +309,38 @@ public class SubmissionService {
     }
 
     public List<SubmissionResponse> getMySubmissions(String employeeEmail) {
+
         User employee = userRepository.findByEmail(employeeEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
         return submissionRepository.findByEmployeeId(employee.getId())
-                .stream().map(this::toResponse).collect(Collectors.toList());
+                .stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
     }
 
     public List<SubmissionResponse> getPendingSubmissionsByProject(Long projectId) {
+
         return submissionRepository.findPendingByProjectId(projectId)
-                .stream().map(this::toResponse).collect(Collectors.toList());
+                .stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
     }
 
-    // --- Comments & Notes ---
-
     public CommentResponse addComment(Long submissionId, CommentRequest request, String userEmail) {
+
         User author = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
         TaskSubmission submission = submissionRepository.findById(submissionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission not found"));
 
-        // If private note, only allow admin/manager
-        if (request.isPrivateNote() && author.getRole() == User.Role.EMPLOYEE) {
-            throw new IllegalArgumentException("Employees cannot add private notes");
+        if (request.isPrivateNote() &&
+                author.getRole() == User.Role.EMPLOYEE) {
+
+            throw new IllegalArgumentException(
+                    "Employees cannot add private notes"
+            );
         }
 
         SubmissionComment comment = SubmissionComment.builder()
@@ -252,28 +352,45 @@ public class SubmissionService {
 
         comment = commentRepository.save(comment);
 
-        if (!request.isPrivateNote() && author.getRole() != User.Role.EMPLOYEE) {
-            eventPublisher.publishEvent(NotificationEvent.builder()
-                    .recipient(submission.getEmployee())
-                    .title("New Comment")
-                    .message("Admin added a comment to your submission on task: " + submission.getTask().getName())
-                    .type(NotificationType.ADMIN_COMMENT)
-                    .build());
+        if (!request.isPrivateNote() &&
+                author.getRole() != User.Role.EMPLOYEE) {
+
+            eventPublisher.publishEvent(
+                    NotificationEvent.builder()
+                            .recipient(submission.getEmployee())
+                            .title("New Comment")
+                            .message(
+                                    "Admin added a comment to your submission on task: "
+                                            + submission.getTask().getName()
+                            )
+                            .type(NotificationType.ADMIN_COMMENT)
+                            .build()
+            );
         }
 
         return toCommentResponse(comment);
     }
 
     public List<CommentResponse> getComments(Long submissionId, String userEmail) {
+
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        
+
         if (user.getRole() == User.Role.EMPLOYEE) {
-            return commentRepository.findBySubmissionIdAndIsPrivateNoteFalseOrderByCreatedAtAsc(submissionId)
-                    .stream().map(this::toCommentResponse).collect(Collectors.toList());
+
+            return commentRepository
+                    .findBySubmissionIdAndIsPrivateNoteFalseOrderByCreatedAtAsc(submissionId)
+                    .stream()
+                    .map(this::toCommentResponse)
+                    .collect(Collectors.toList());
+
         } else {
-            return commentRepository.findBySubmissionIdOrderByCreatedAtAsc(submissionId)
-                    .stream().map(this::toCommentResponse).collect(Collectors.toList());
+
+            return commentRepository
+                    .findBySubmissionIdOrderByCreatedAtAsc(submissionId)
+                    .stream()
+                    .map(this::toCommentResponse)
+                    .collect(Collectors.toList());
         }
     }
 }

@@ -1,0 +1,4 @@
+name: RWMS LOCAL
+values:
+  - key: baseUrl
+    value: ''
